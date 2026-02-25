@@ -293,4 +293,262 @@ describe("hashline-read-enhancer", () => {
     await expect(hook["tool.execute.after"](input, output)).resolves.toBeUndefined()
     expect(output.output).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const x = 1/)
   })
+
+  describe("experimental.chat.messages.transform", () => {
+    //#given — test data builders
+    function createFilePart(overrides: Record<string, any> = {}) {
+      return {
+        id: "fp1",
+        sessionID: "s",
+        messageID: "m",
+        type: "file",
+        mime: "text/plain",
+        url: "data:text/plain;base64,dGVzdA==",
+        source: {
+          type: "file",
+          path: "/path/to/file.ts",
+          text: { value: "line one\nline two\nline three", start: 0, end: 47 },
+        },
+        ...overrides,
+      }
+    }
+
+    function createMessage(overrides: Record<string, any> = {}) {
+      return {
+        id: "m1",
+        role: "user",
+        sessionID: "s",
+        ...overrides,
+      } as any
+    }
+
+    it("Case 1: text file FilePart gets a synthetic LineID text part injected before it", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart = createFilePart({
+        source: {
+          type: "file",
+          path: "/path/to/file.ts",
+          text: { value: "const x = 1\nconst y = 2", start: 0, end: 25 },
+        },
+      })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart],
+          },
+        ],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      expect(transform).toBeDefined()
+      await transform(input, output)
+
+      //#then
+      expect(output.messages[0].parts.length).toBe(2)
+      const syntheticPart = output.messages[0].parts[0]
+      const filePart2 = output.messages[0].parts[1]
+      expect(syntheticPart.type).toBe("text")
+      expect(syntheticPart.synthetic).toBe(true)
+      expect(syntheticPart.text).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const x = 1/)
+      expect(syntheticPart.text).toMatch(/2#[ZPMQVRWSNKTXJBYH]{2}\|const y = 2/)
+      expect(filePart2).toEqual(filePart)
+    })
+
+    it("Case 2: FilePart with binary mime type is skipped", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart = createFilePart({ mime: "image/png" })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart],
+          },
+        ],
+      }
+      const originalLength = output.messages[0].parts.length
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then — no injection for binary mime
+      expect(output.messages[0].parts.length).toBe(originalLength)
+      expect(output.messages[0].parts[0]).toEqual(filePart)
+    })
+
+    it("Case 3: FilePart without source is skipped", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart = createFilePart({ source: undefined })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart],
+          },
+        ],
+      }
+      const originalLength = output.messages[0].parts.length
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then — no injection for missing source
+      expect(output.messages[0].parts.length).toBe(originalLength)
+      expect(output.messages[0].parts[0]).toEqual(filePart)
+    })
+
+    it("Case 4: multiple FileParts — each text one gets its own synthetic part", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart1 = createFilePart({
+        id: "fp1",
+        source: {
+          type: "file",
+          path: "/path/to/file1.ts",
+          text: { value: "const a = 1", start: 0, end: 11 },
+        },
+      })
+      const filePart2 = createFilePart({
+        id: "fp2",
+        source: {
+          type: "file",
+          path: "/path/to/file2.ts",
+          text: { value: "const b = 2", start: 0, end: 11 },
+        },
+      })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart1, filePart2],
+          },
+        ],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then — two synthetic parts, one per FilePart
+      expect(output.messages[0].parts.length).toBe(4)
+      expect(output.messages[0].parts[0].type).toBe("text")
+      expect(output.messages[0].parts[0].synthetic).toBe(true)
+      expect(output.messages[0].parts[1]).toEqual(filePart1)
+      expect(output.messages[0].parts[2].type).toBe("text")
+      expect(output.messages[0].parts[2].synthetic).toBe(true)
+      expect(output.messages[0].parts[3]).toEqual(filePart2)
+    })
+
+    it("Case 5: only the LAST user message is processed", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const userFilePart = createFilePart({ id: "fp-user" })
+      const assistantFilePart = createFilePart({ id: "fp-assistant" })
+      const userMessage = createMessage()
+      const assistantMessage = createMessage({ id: "m2", role: "assistant" })
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: userMessage,
+            parts: [userFilePart],
+          },
+          {
+            info: assistantMessage,
+            parts: [assistantFilePart],
+          },
+        ],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then — only last user message (not last message) is processed
+      expect(output.messages[0].parts.length).toBe(2)
+      expect(output.messages[0].parts[0].type).toBe("text")
+      expect(output.messages[1].parts.length).toBe(1)
+      expect(output.messages[1].parts[0]).toEqual(assistantFilePart)
+    })
+
+    it("Case 6: SymbolSource (type: 'symbol') also gets LINE#ID annotation", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart = createFilePart({
+        source: {
+          type: "symbol",
+          path: "/path/to/file.ts",
+          name: "foo",
+          text: { value: "function foo() {\n  return 1\n}", start: 0, end: 30 },
+          range: { start: { line: 0, character: 0 }, end: { line: 2, character: 1 } },
+        },
+      })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart],
+          },
+        ],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then
+      expect(output.messages[0].parts.length).toBe(2)
+      const syntheticPart = output.messages[0].parts[0]
+      expect(syntheticPart.type).toBe("text")
+      expect(syntheticPart.synthetic).toBe(true)
+      expect(syntheticPart.text).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|function foo/)
+    })
+
+    it("Case 7: empty source.text.value → no injection", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const filePart = createFilePart({
+        source: {
+          type: "file",
+          path: "/path/to/empty.ts",
+          text: { value: "", start: 0, end: 0 },
+        },
+      })
+      const message = createMessage()
+      const input = {}
+      const output = {
+        messages: [
+          {
+            info: message,
+            parts: [filePart],
+          },
+        ],
+      }
+      const originalLength = output.messages[0].parts.length
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform(input, output)
+
+      //#then — no injection for empty source
+      expect(output.messages[0].parts.length).toBe(originalLength)
+      expect(output.messages[0].parts[0]).toEqual(filePart)
+    })
+  })
 })
