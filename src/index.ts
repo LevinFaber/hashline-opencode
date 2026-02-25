@@ -7,9 +7,7 @@ export { createHashlineEditTool } from "./tools/hashline-edit"
 export { createHashlineReadEnhancerHook } from "./hooks/hashline-read-enhancer"
 
 export const HashlinePlugin: Plugin = async (ctx: PluginInput) => {
-  const readEnhancer = createHashlineReadEnhancerHook(ctx, {
-    hashline_edit: { enabled: true },
-  })
+  const readEnhancer = createHashlineReadEnhancerHook(ctx)
 
   return {
     tool: {

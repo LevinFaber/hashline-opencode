@@ -3,9 +3,6 @@ import { computeLineHash } from "../../tools/hashline-edit/hash-computation"
 
 const WRITE_SUCCESS_MARKER = "File written successfully."
 
-interface HashlineReadEnhancerConfig {
-  hashline_edit?: { enabled: boolean }
-}
 
 const COLON_READ_LINE_PATTERN = /^\s*(\d+): ?(.*)$/
 const PIPE_READ_LINE_PATTERN = /^\s*(\d+)\| ?(.*)$/
@@ -23,9 +20,6 @@ function isWriteTool(toolName: string): boolean {
   return toolName.toLowerCase() === "write"
 }
 
-function shouldProcess(config: HashlineReadEnhancerConfig): boolean {
-  return config.hashline_edit?.enabled ?? false
-}
 
 function isTextFile(output: string): boolean {
   const firstLine = output.split("\n")[0] ?? ""
@@ -167,8 +161,7 @@ async function appendWriteHashlineOutput(output: { output: string; metadata: unk
 }
 
 export function createHashlineReadEnhancerHook(
-  _ctx: PluginInput,
-  config: HashlineReadEnhancerConfig
+  _ctx: PluginInput
 ) {
   return {
     "tool.execute.after": async (
@@ -176,15 +169,12 @@ export function createHashlineReadEnhancerHook(
       output: { title: string; output: string; metadata: unknown }
     ) => {
       if (!isReadTool(input.tool)) {
-        if (isWriteTool(input.tool) && typeof output.output === "string" && shouldProcess(config)) {
+        if (isWriteTool(input.tool) && typeof output.output === "string") {
           await appendWriteHashlineOutput(output)
         }
         return
       }
       if (typeof output.output !== "string") {
-        return
-      }
-      if (!shouldProcess(config)) {
         return
       }
       output.output = transformOutput(output.output)
