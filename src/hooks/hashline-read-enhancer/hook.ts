@@ -248,6 +248,12 @@ export function createHashlineReadEnhancerHook(
             synthetic: true,
           })
         }
+        if (part.type === "text" && typeof part.text === "string") {
+          const transformed = transformOutput(part.text)
+          if (transformed !== part.text) {
+            part.text = transformed
+          }
+        }
         newParts.push(part)
       }
       message.parts = newParts

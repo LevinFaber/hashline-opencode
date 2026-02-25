@@ -1,6 +1,6 @@
 {
   "name": "hashline-opencode",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "OpenCode plugin that replaces the built-in edit tool with hash-anchored LINE#ID precision editing",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -296,7 +296,7 @@ describe("hashline-read-enhancer", () => {
 
   describe("experimental.chat.messages.transform", () => {
     //#given — test data builders
-    function createFilePart(overrides: Record<string, any> = {}) {
+    function createFilePart(overrides: Record<string, any> = {}): any {
       return {
         id: "fp1",
         sessionID: "s",
@@ -549,6 +549,126 @@ describe("hashline-read-enhancer", () => {
       //#then — no injection for empty source
       expect(output.messages[0].parts.length).toBe(originalLength)
       expect(output.messages[0].parts[0]).toEqual(filePart)
+    })
+
+    it("Case 8: @mention TextPart with <content>N: content</content> format gets LINE#IDs added", async () => {
+      //#given — this is the actual format OpenCode produces for @mention files
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const textPart = {
+        id: "tp1",
+        sessionID: "s",
+        messageID: "m",
+        type: "text",
+        text: [
+          "Called the Read tool with the following input: {\"filePath\":\"/tmp/demo.ts\"}",
+          "<path>/tmp/demo.ts</path>",
+          "<type>file</type>",
+          "<content>",
+          "1: const x = 1",
+          "2: const y = 2",
+          "</content>",
+        ].join("\n"),
+        synthetic: true,
+      }
+      const output: any = {
+        messages: [{ info: { role: "user" }, parts: [textPart] }],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform({}, output)
+
+      //#then — TextPart text should have LINE#IDs in the <content> block
+      const updatedText = output.messages[0].parts[0].text
+      expect(updatedText).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const x = 1/)
+      expect(updatedText).toMatch(/2#[ZPMQVRWSNKTXJBYH]{2}\|const y = 2/)
+      expect(updatedText).toContain("Called the Read tool")
+      expect(updatedText).toContain("<path>/tmp/demo.ts</path>")
+    })
+
+    it("Case 9: TextPart without read-tool format is left unchanged", async () => {
+      //#given — a plain user text message (not a file read result)
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const plainText = "Please help me fix the bug in this function"
+      const textPart = {
+        id: "tp2",
+        sessionID: "s",
+        messageID: "m",
+        type: "text",
+        text: plainText,
+        synthetic: false,
+      }
+      const output: any = {
+        messages: [{ info: { role: "user" }, parts: [textPart] }],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform({}, output)
+
+      //#then — unchanged
+      expect(output.messages[0].parts[0].text).toBe(plainText)
+    })
+
+    it("Case 10: TextPart with inline <content>N: format also gets LINE#IDs", async () => {
+      //#given — inline open tag: <content>1: line
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const textPart = {
+        id: "tp3",
+        sessionID: "s",
+        messageID: "m",
+        type: "text",
+        text: "<path>/tmp/demo.ts</path>\n<type>file</type>\n<content>1: const x = 1\n2: const y = 2\n</content>",
+        synthetic: true,
+      }
+      const output: any = {
+        messages: [{ info: { role: "user" }, parts: [textPart] }],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform({}, output)
+
+      //#then
+      const updatedText = output.messages[0].parts[0].text
+      expect(updatedText).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const x = 1/)
+      expect(updatedText).toMatch(/2#[ZPMQVRWSNKTXJBYH]{2}\|const y = 2/)
+    })
+
+    it("Case 11: multiple TextParts in one message are all processed", async () => {
+      //#given
+      const hook = createHashlineReadEnhancerHook(mockCtx())
+      const textPart1 = {
+        id: "tp4",
+        sessionID: "s",
+        messageID: "m",
+        type: "text",
+        text: "<path>/tmp/one.ts</path>\n<type>file</type>\n<content>1: const a = 1\n2: const b = 2\n</content>",
+        synthetic: true,
+      }
+      const textPart2 = {
+        id: "tp5",
+        sessionID: "s",
+        messageID: "m",
+        type: "text",
+        text: "<path>/tmp/two.ts</path>\n<type>file</type>\n<content>1: const c = 3\n2: const d = 4\n</content>",
+        synthetic: true,
+      }
+      const output: any = {
+        messages: [{ info: { role: "user" }, parts: [textPart1, textPart2] }],
+      }
+
+      //#when
+      const transform = hook["experimental.chat.messages.transform"]
+      await transform({}, output)
+
+      //#then
+      const updatedText1 = output.messages[0].parts[0].text
+      const updatedText2 = output.messages[0].parts[1].text
+      expect(updatedText1).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const a = 1/)
+      expect(updatedText1).toMatch(/2#[ZPMQVRWSNKTXJBYH]{2}\|const b = 2/)
+      expect(updatedText2).toMatch(/1#[ZPMQVRWSNKTXJBYH]{2}\|const c = 3/)
+      expect(updatedText2).toMatch(/2#[ZPMQVRWSNKTXJBYH]{2}\|const d = 4/)
     })
   })
 })
