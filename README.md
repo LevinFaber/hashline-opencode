@@ -42,10 +42,22 @@ Place the plugin in `.opencode/plugins/hashline-opencode/` and reference it:
 }
 ```
 
+### Option 3: Global plugin (symlink)
+
+Symlink the built `dist/index.js` directly into the global plugin directory:
+
+```bash
+mkdir -p ~/.config/opencode/plugins
+ln -s /path/to/hashline-opencode/dist/index.js ~/.config/opencode/plugins/hashline-opencode.js
+```
+
+The file must live directly in `~/.config/opencode/plugins/` — symlinks to directories won't work.
+
 ## What it does
 
 - Replaces built-in `edit` tool with `hashline_edit` using LINE#ID hash anchors
 - Hooks into `tool.execute.after` to add LINE#IDs to all `read` tool output
+- **Annotates `@`-mentioned files with LINE#IDs** — unlike other implementations, this plugin intercepts OpenCode's `experimental.chat.messages.transform` hook to process files included via `@filename`, so the AI receives correct hashes immediately without a separate read step
 - Validates hashes before applying edits — rejects stale references
 - Supports three operations: `replace`, `append`, `prepend`
 - Applies edits bottom-up to preserve line numbers during multi-edit
