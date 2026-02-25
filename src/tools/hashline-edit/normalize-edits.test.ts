@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { normalizeHashlineEdits, type RawHashlineEdit } from "./normalize-edits"
+import { normalizeHashlineEdits, type RawHashlineEdit } from "./types"
 
 describe("normalizeHashlineEdits", () => {
   it("maps replace with pos to replace", () => {

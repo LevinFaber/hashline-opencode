@@ -3,7 +3,7 @@ import { storeToolMetadata } from "../../features/tool-metadata-store"
 import { applyHashlineEditsWithReport } from "./edit-operations"
 import { countLineDiffs, generateUnifiedDiff } from "./diff-utils"
 import { canonicalizeFileText, restoreFileText } from "./file-text-canonicalization"
-import { normalizeHashlineEdits, type RawHashlineEdit } from "./normalize-edits"
+import { normalizeHashlineEdits, type RawHashlineEdit } from "./types"
 import type { HashlineEdit } from "./types"
 import { HashlineMismatchError } from "./validation"
 
@@ -14,17 +14,14 @@ interface HashlineEditArgs {
   rename?: string
 }
 
-type ToolContextWithCallID = ToolContext & {
+type ToolContextExtended = ToolContext & {
   callID?: string
   callId?: string
   call_id?: string
-}
-
-type ToolContextWithMetadata = ToolContextWithCallID & {
   metadata?: (value: unknown) => void
 }
 
-function resolveToolCallID(ctx: ToolContextWithCallID): string | undefined {
+function resolveToolCallID(ctx: ToolContextExtended): string | undefined {
   if (typeof ctx.callID === "string" && ctx.callID.trim() !== "") return ctx.callID
   if (typeof ctx.callId === "string" && ctx.callId.trim() !== "") return ctx.callId
   if (typeof ctx.call_id === "string" && ctx.call_id.trim() !== "") return ctx.call_id
@@ -82,7 +79,7 @@ function buildSuccessMeta(
 
 export async function executeHashlineEditTool(args: HashlineEditArgs, context: ToolContext): Promise<string> {
   try {
-    const metadataContext = context as ToolContextWithMetadata
+    const metadataContext = context as ToolContextExtended
     const filePath = args.filePath
     const { delete: deleteMode, rename } = args
 
