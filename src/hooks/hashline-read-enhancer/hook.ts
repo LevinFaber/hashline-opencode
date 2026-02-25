@@ -58,12 +58,12 @@ function transformLine(line: string): string {
   return `${parsed.lineNumber}#${hash}|${parsed.content}`
 }
 
-function transformOutput(output: string): string {
-  if (!output) {
-    return output
-  }
-
+function extractContentBlock(
+  output: string
+): { prefix: string[]; contentLines: string[]; suffix: string[] } | null {
   const lines = output.split("\n")
+
+  // Detect <content> or <file> block
   const contentStart = lines.findIndex(
     (line) => line === CONTENT_OPEN_TAG || line.startsWith(CONTENT_OPEN_TAG)
   )
@@ -75,34 +75,64 @@ function transformOutput(output: string): string {
   const blockEnd = contentStart !== -1 ? contentEnd : fileEnd
   const openTag = contentStart !== -1 ? CONTENT_OPEN_TAG : FILE_OPEN_TAG
 
-  if (blockStart !== -1 && blockEnd !== -1 && blockEnd > blockStart) {
-    const openLine = lines[blockStart] ?? ""
-    const inlineFirst = openLine.startsWith(openTag) && openLine !== openTag
-      ? openLine.slice(openTag.length)
-      : null
-    const fileLines = inlineFirst !== null
-      ? [inlineFirst, ...lines.slice(blockStart + 1, blockEnd)]
-      : lines.slice(blockStart + 1, blockEnd)
-    if (!isTextFile(fileLines[0] ?? "")) {
+  // No block found
+  if (blockStart === -1 || blockEnd === -1 || blockEnd <= blockStart) {
+    return null
+  }
+
+  // Handle inline-open-tag: <content>1: first line
+  const openLine = lines[blockStart] ?? ""
+  const inlineFirst = openLine.startsWith(openTag) && openLine !== openTag
+    ? openLine.slice(openTag.length)
+    : null
+
+  const contentLines = inlineFirst !== null
+    ? [inlineFirst, ...lines.slice(blockStart + 1, blockEnd)]
+    : lines.slice(blockStart + 1, blockEnd)
+
+  const prefixLines = inlineFirst !== null
+    ? [...lines.slice(0, blockStart), openTag]
+    : lines.slice(0, blockStart + 1)
+
+  const suffixLines = lines.slice(blockEnd)
+
+  return {
+    prefix: prefixLines,
+    contentLines,
+    suffix: suffixLines,
+  }
+}
+
+function transformOutput(output: string): string {
+  if (!output) {
+    return output
+  }
+
+  // Try to extract a block (<content> or <file>)
+  const block = extractContentBlock(output)
+
+  if (block !== null) {
+    // Validate that contentLines start with text-file format
+    if (!isTextFile(block.contentLines[0] ?? "")) {
       return output
     }
 
+    // Transform content lines
     const result: string[] = []
-    for (const line of fileLines) {
+    for (const line of block.contentLines) {
       if (!parseReadLine(line)) {
-        result.push(...fileLines.slice(result.length))
+        result.push(...block.contentLines.slice(result.length))
         break
       }
       result.push(transformLine(line))
     }
 
-    const prefixLines = inlineFirst !== null
-      ? [...lines.slice(0, blockStart), openTag]
-      : lines.slice(0, blockStart + 1)
-
-    return [...prefixLines, ...result, ...lines.slice(blockEnd)].join("\n")
+    // Reassemble: prefix + transformed content + suffix
+    return [...block.prefix, ...result, ...block.suffix].join("\n")
   }
 
+  // Plain text mode: no explicit block tags found
+  const lines = output.split("\n")
   if (!isTextFile(lines[0] ?? "")) {
     return output
   }
