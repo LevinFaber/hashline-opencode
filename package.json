@@ -1,7 +1,7 @@
 {
   "name": "hashline-opencode",
   "version": "0.1.0",
-  "description": "Standalone hashline plugin extraction from oh-my-opencode",
+  "description": "OpenCode plugin that replaces the built-in edit tool with hash-anchored LINE#ID precision editing",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "type": "module",
@@ -11,6 +11,11 @@
       "import": "./dist/index.js"
     }
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly",
     "typecheck": "tsc --noEmit",
@@ -24,7 +29,12 @@
     "hash",
     "edit"
   ],
-  "license": "SUL-1.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/LevinFaber/hashline-opencode.git"
+  },
+  "homepage": "https://github.com/LevinFaber/hashline-opencode#readme",
   "dependencies": {
     "@opencode-ai/plugin": "^1.1.19",
     "diff": "^8.0.3"
