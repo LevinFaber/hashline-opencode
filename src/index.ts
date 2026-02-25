@@ -30,7 +30,7 @@ export const HashlinePlugin: Plugin = async (ctx: PluginInput) => {
         await readEnhancer["tool.execute.after"](input, output)
       }
     },
-  }
+    "experimental.chat.messages.transform": readEnhancer["experimental.chat.messages.transform"],
 }
 
 export default HashlinePlugin

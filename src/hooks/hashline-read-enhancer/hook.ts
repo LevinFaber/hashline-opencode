@@ -209,5 +209,48 @@ export function createHashlineReadEnhancerHook(
       }
       output.output = transformOutput(output.output)
     },
+    "experimental.chat.messages.transform": async (
+      _input: {},
+      output: { messages: Array<{ info: { role: string; [k: string]: unknown }, parts: any[] }> }
+    ): Promise<void> => {
+      let lastUserIdx = -1
+      for (let i = output.messages.length - 1; i >= 0; i--) {
+        if (output.messages[i].info.role === "user") {
+          lastUserIdx = i
+          break
+        }
+      }
+      if (lastUserIdx === -1) return
+
+      const message = output.messages[lastUserIdx]
+      const newParts: any[] = []
+      for (const part of message.parts) {
+        if (
+          part.type === "file" &&
+          typeof part.mime === "string" &&
+          part.mime.startsWith("text/") &&
+          part.source &&
+          part.source.text?.value
+        ) {
+          const rawContent: string = part.source.text.value
+          const annotatedLines = rawContent.split("\n").map((line: string, i: number) => {
+            const lineNumber = i + 1
+            const hash = computeLineHash(lineNumber, line)
+            return `${lineNumber}#${hash}|${line}`
+          })
+          const annotatedContent = annotatedLines.join("\n")
+          newParts.push({
+            id: `hashline-annotation-${part.id}`,
+            messageID: part.messageID,
+            sessionID: part.sessionID,
+            type: "text",
+            text: annotatedContent,
+            synthetic: true,
+          })
+        }
+        newParts.push(part)
+      }
+      message.parts = newParts
+    },
   }
 }
